@@ -26,7 +26,7 @@ func routes(_ app: Application) throws {
     // movies/kids
     // movies/horror
     // movies/action
-    app.get("movies", ":genre") { req async throws -> String in
+    app.get("moviesOld", ":genre") { req async throws -> String in
         guard let genre = req.parameters.get("genre") else {
             throw Abort(.badRequest)
         }
@@ -41,7 +41,7 @@ func routes(_ app: Application) throws {
     }
 
     // movies/action/2023
-    app.get("movies", ":genre", ":year") { req async throws -> String in
+    app.get("moviesOld", ":genre", ":year") { req async throws -> String in
         guard let genre = req.parameters.get("genre"),
             let year = req.parameters.get("year")
         else {
@@ -51,11 +51,11 @@ func routes(_ app: Application) throws {
         return "All movies of genre: \(genre) for year \(year)"
     }
 
-    app.get("movies") { req async in
+    app.get("moviesOld") { req async in
         [Film(title: "Batman", year: 2023), Film(title: "Spiderman", year: 2022)]
     }
 
-    app.post("movies") { req async throws in
+    app.post("moviesOld") { req async throws in
         let movie = try req.content.decode(Film.self)
         return movie
     }
@@ -95,4 +95,52 @@ func routes(_ app: Application) throws {
     users.get("premium") { req async -> String in
         return "premium"
     }
+
+    // create movie in postgres
+    app.post("movies") { req async throws in
+        let movie = try req.content.decode(Movie.self)
+        try await movie.save(on: req.db)
+        return movie
+    }
+
+    // get all movies
+    app.get("movies") { req async throws in
+        try await Movie.query(on: req.db)
+            .all()
+    }
+
+    // get movie by id
+    // /movie/08AFB2BE-EA28-4543-B990-D2637D93DE71
+    app.get("movies", ":id") { req async throws in
+        guard let movie = try await Movie.find(req.parameters.get("id"), on: req.db) else {
+            throw Abort(.badRequest)
+        }
+
+        return movie
+    }
+
+    // delete movie by id
+    // /movie/08AFB2BE-EA28-4543-B990-D2637D93DE71
+    app.delete("movies", ":id") { req async throws in
+        guard let movie = try await Movie.find(req.parameters.get("id"), on: req.db) else {
+            throw Abort(.badRequest)
+        }
+        try await movie.delete(on: req.db)
+        return movie
+    }
+
+    // update movie by id
+    // /movie/08AFB2BE-EA28-4543-B990-D2637D93DE71
+    app.put("movies") { req async throws in
+        let editedMovie = try req.content.decode(Movie.self)
+        guard let movieToUpdate = try await Movie.find(editedMovie.id, on: req.db) else {
+            throw Abort(.badRequest)
+        }
+
+        movieToUpdate.title = editedMovie.title
+
+        try await movieToUpdate.update(on: req.db)
+        return movieToUpdate
+    }
+
 }
